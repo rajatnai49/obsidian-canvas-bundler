@@ -37,7 +37,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 		if (attachmentFile instanceof TFile) {
 			let buffer = await app.vault.readBinary(attachmentFile)
 			attachmentFolder?.file(attachmentFile.name, buffer)
-			attachmentNode.file = `attachments/${attachmentFile.name}`
+			attachmentNode.file = `${canvasName}/attachments/${attachmentFile.name}`
 		}
 	}
 
@@ -46,7 +46,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	for (let fileNode of canvasFileNodes) {
 		let file = app.vault.getFileByPath(fileNode.file)
 		if (file instanceof TFile) {
-			fileNode.file = `notes/${file.name}`
+			fileNode.file = `${canvasName}/notes/${file.name}`
 			filesToProcess.push(file)
 		}
 	}
@@ -89,7 +89,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 		notesFolder?.file(current.name, data)
 	}
 
-	zip.file(canvasName + ".json", JSON.stringify(canvasObjectData))
+	zip.file(canvasName + ".canvas", JSON.stringify(canvasObjectData))
 
 	let zipBuffer = await zip.generateAsync({ type: "arraybuffer" })
 	await app.vault.createBinary(canvasName + "Copy", zipBuffer)
