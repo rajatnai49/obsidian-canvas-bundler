@@ -2,9 +2,15 @@ import JSZip from 'jszip';
 import { App, TFile } from 'obsidian';
 import type { CanvasData, CanvasFileData, CanvasGroupData } from 'obsidian/canvas'
 
+type FileToProcess = TFile & {
+	newFileName: string
+}
+
 export default async function export_canvas(canvasRaw: string, app: App, canvasName: string) {
 	const visitedNotes = new Set<string>();
-	const visitedAttachments = new Set<string>();
+
+	const nameCounter = new Map<string, number>();
+	const filePathNameMapping = new Map<string, string>();
 
 	const canvasObjectData = JSON.parse(canvasRaw) as CanvasData
 	const nodes = canvasObjectData.nodes
@@ -14,7 +20,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	let canvasGroupNodes: CanvasGroupData[] = [];
 
 	nodes.forEach((node) => {
-		if (node.type == "file" && is_md_file(node.file)) {
+		if (node.type == "file" && isMarkdownFile(node.file)) {
 			canvasFileNodes.push(node)
 		} else if (node.type == "file") {
 			canvasAttachmentNodes.push(node)
@@ -28,27 +34,67 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	const notesFolder = zip.folder("notes")
 	const attachmentFolder = zip.folder("attachments")
 
+	// Handles attachments directly inside of the Canvas
 	for (let attachmentNode of canvasAttachmentNodes) {
-		if (visitedAttachments.has(attachmentNode.file)) {
+		if (filePathNameMapping.has(attachmentNode.file)) {
+			attachmentNode.file = filePathNameMapping.get(attachmentNode.file) ?? ""
 			continue;
 		}
-		visitedAttachments.add(attachmentNode.file)
 		let attachmentFile = app.vault.getFileByPath(attachmentNode.file)
 		if (attachmentFile instanceof TFile) {
 			let buffer = await app.vault.readBinary(attachmentFile)
-			attachmentFolder?.file(attachmentFile.name, buffer)
-			attachmentNode.file = `${canvasName}/attachments/${attachmentFile.name}`
+			let newAttachmentName = getUniqueName(attachmentFile.name, nameCounter)
+			attachmentFolder?.file(newAttachmentName, buffer)
+			let newAttachmentFilePath = `${canvasName}/attachments/${newAttachmentName}`
+			filePathNameMapping.set(attachmentNode.file, newAttachmentFilePath)
+			attachmentNode.file = newAttachmentFilePath
 		}
 	}
 
-	let filesToProcess: TFile[] = []
+	// Handles background images of the Group Nodes
+	for (let groupNode of canvasGroupNodes) {
+		let bgImage = groupNode.background
+		if (!bgImage) {
+			continue;
+		}
+		if (filePathNameMapping.has(bgImage)) {
+			groupNode.background = filePathNameMapping.get(bgImage) ?? ""
+			continue;
+		}
+		let bgImageFile = app.vault.getFileByPath(bgImage)
+		if (bgImageFile instanceof TFile) {
+			let buffer = await app.vault.readBinary(bgImageFile)
+			let newBgImageName = getUniqueName(bgImageFile.name, nameCounter)
+			attachmentFolder?.file(newBgImageName, buffer)
+			let newBgImagePath = `${canvasName}/attachments/${newBgImageName}`
+			filePathNameMapping.set(bgImage, newBgImagePath)
+			groupNode.background = newBgImagePath
+		}
 
+	}
+
+	// Handles File Nodes
+	let filesToProcess: FileToProcess[] = []
+
+	// Files directly inside of the Canvas
 	for (let fileNode of canvasFileNodes) {
 		let file = app.vault.getFileByPath(fileNode.file)
-		if (file instanceof TFile) {
-			fileNode.file = `${canvasName}/notes/${file.name}`
-			filesToProcess.push(file)
+		if (!(file instanceof TFile)) continue
+
+		let newFilePath = filePathNameMapping.get(file.path)
+
+		if (!newFilePath) {
+			let newFileName = getUniqueName(file.name, nameCounter)
+			newFilePath = `${canvasName}/notes/${newFileName}`
+
+			filePathNameMapping.set(file.path, newFilePath)
+
+			filesToProcess.push({
+				...file,
+				newFileName: newFileName
+			})
 		}
+		fileNode.file = newFilePath
 	}
 
 	while (filesToProcess.length > 0) {
@@ -65,28 +111,65 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 		const cache = app.metadataCache.getFileCache(current)
 		const links = cache?.links ?? []
 		const embededs = cache?.embeds ?? []
+		const replacements = []
 
 		for (const link of links) {
 			const linkedFile = app.metadataCache.getFirstLinkpathDest(link.link, current.path)
-			if (linkedFile instanceof TFile) {
-				filesToProcess.push(linkedFile)
-				data = data.replace(link.link, linkedFile.name)
+			if (!(linkedFile instanceof TFile)) continue;
+
+			let newFilePath = filePathNameMapping.get(linkedFile.path)
+
+			if (!newFilePath) {
+				let linkedFileNewName = getUniqueName(linkedFile.name, nameCounter)
+				newFilePath = `${canvasName}/notes/${linkedFileNewName}`
+
+				filePathNameMapping.set(linkedFile.path, newFilePath)
+
+				filesToProcess.push({
+					...linkedFile,
+					newFileName: linkedFileNewName
+				})
 			}
+
+			replacements.push({
+				start: link.position.start.offset,
+				end: link.position.end.offset,
+				text: rewriteOriginalLink(link.original, newFilePath)
+			})
 		}
 
 		for (const embed of embededs) {
-			if (visitedAttachments.has(embed.link)) {
-				continue;
-			}
-			visitedAttachments.add(embed.link)
 			const file = app.metadataCache.getFirstLinkpathDest(embed.link, current.path)
-			if (file instanceof TFile) {
+			if (!(file instanceof TFile)) continue;
+
+			let embededNewFilePath = filePathNameMapping.get(file.path)
+
+			if (!embededNewFilePath) {
 				let buffer = await app.vault.readBinary(file)
-				attachmentFolder?.file(file.name, buffer)
-				data = data.replace(embed.link, file.name)
+				let embededNewName = getUniqueName(file.name, nameCounter)
+				attachmentFolder?.file(embededNewName, buffer)
+				embededNewFilePath = `${canvasName}/attachments/${embededNewName}`
+				filePathNameMapping.set(file.path, embededNewFilePath)
 			}
+
+			replacements.push({
+				start: embed.position.start.offset,
+				end: embed.position.end.offset,
+				text: rewriteOriginalLink(embed.original, embededNewFilePath)
+			})
 		}
-		notesFolder?.file(current.name, data)
+
+		replacements.sort((a, b) => b.start - a.start)
+
+		for (const replacement of replacements) {
+			data =
+				data.slice(0, replacement.start) +
+				replacement.text +
+				data.slice(replacement.end)
+		}
+
+		let fileName = current.newFileName
+		notesFolder?.file(fileName, data)
 	}
 
 	zip.file(canvasName + ".canvas", JSON.stringify(canvasObjectData))
@@ -95,10 +178,49 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	await app.vault.createBinary(canvasName + "Copy", zipBuffer)
 }
 
-function is_md_file(filename: string): boolean {
+function isMarkdownFile(filename: string): boolean {
 	const ext = filename.slice(filename.lastIndexOf('.') + 1)
 	if (ext == "md") {
 		return true
 	}
 	return false
+}
+
+function getUniqueName(fileName: string, currentCounterMap: Map<string, number>): string {
+	let currentValue = currentCounterMap.get(fileName)
+	if (currentValue == undefined) {
+		currentCounterMap.set(fileName, 1)
+		return fileName
+	}
+	currentCounterMap.set(fileName, currentValue + 1)
+	return `${currentValue}-${fileName}`
+}
+
+
+function rewriteOriginalLink(original: string, newPath: string): string {
+	if (original.startsWith("[[") || original.startsWith("![[")) {
+		const isEmbed = original.startsWith("![[");
+
+		const open = isEmbed ? "![[" : "[[";
+		const close = "]]";
+
+		const inner = original.slice(open.length, -close.length);
+		const aliasIndex = inner.indexOf("|");
+
+		if (aliasIndex !== -1) {
+			const alias = inner.slice(aliasIndex);
+			return `${open}${newPath}${alias}${close}`;
+		}
+
+		return `${open}${newPath}${close}`;
+	}
+
+	const markdownLinkMatch = original.match(/^(!?\[[^\]]*\]\()(.+?)(\))$/);
+
+	if (markdownLinkMatch) {
+		const [, prefix, , suffix] = markdownLinkMatch;
+		return `${prefix}${encodeURI(newPath)}${suffix}`;
+	}
+
+	return original;
 }
