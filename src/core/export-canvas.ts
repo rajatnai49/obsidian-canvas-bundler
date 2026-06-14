@@ -2,7 +2,8 @@ import JSZip from 'jszip';
 import { App, TFile } from 'obsidian';
 import type { CanvasData, CanvasFileData, CanvasGroupData } from 'obsidian/canvas'
 
-type FileToProcess = TFile & {
+interface FileToProcess {
+	file: TFile
 	newFileName: string
 }
 
@@ -90,7 +91,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 			filePathNameMapping.set(file.path, newFilePath)
 
 			filesToProcess.push({
-				...file,
+				file: file,
 				newFileName: newFileName
 			})
 		}
@@ -98,7 +99,8 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	}
 
 	while (filesToProcess.length > 0) {
-		let current = filesToProcess.pop()!
+		let currentItem = filesToProcess.pop()!
+		let current = currentItem.file
 
 		if (visitedNotes.has(current.path)) {
 			continue
@@ -126,7 +128,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 				filePathNameMapping.set(linkedFile.path, newFilePath)
 
 				filesToProcess.push({
-					...linkedFile,
+					file: linkedFile,
 					newFileName: linkedFileNewName
 				})
 			}
@@ -168,14 +170,14 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 				data.slice(replacement.end)
 		}
 
-		let fileName = current.newFileName
+		let fileName = currentItem.newFileName
 		notesFolder?.file(fileName, data)
 	}
 
 	zip.file(canvasName + ".canvas", JSON.stringify(canvasObjectData))
 
 	let zipBuffer = await zip.generateAsync({ type: "arraybuffer" })
-	await app.vault.createBinary(canvasName + "Copy", zipBuffer)
+	await app.vault.createBinary(canvasName + "_export.zip", zipBuffer)
 }
 
 function isMarkdownFile(filename: string): boolean {
@@ -186,14 +188,28 @@ function isMarkdownFile(filename: string): boolean {
 	return false
 }
 
-function getUniqueName(fileName: string, currentCounterMap: Map<string, number>): string {
-	let currentValue = currentCounterMap.get(fileName)
-	if (currentValue == undefined) {
-		currentCounterMap.set(fileName, 1)
-		return fileName
+function getUniqueName(
+	fileName: string,
+	currentCounterMap: Map<string, number>
+): string {
+	const currentValue = currentCounterMap.get(fileName);
+
+	if (currentValue === undefined) {
+		currentCounterMap.set(fileName, 2);
+		return fileName;
 	}
-	currentCounterMap.set(fileName, currentValue + 1)
-	return `${currentValue}-${fileName}`
+
+	currentCounterMap.set(fileName, currentValue + 1);
+
+	const match = fileName.match(/^(.+?)(\.[^.]+(?:\.[^.]+)*)$/);
+
+	if (!match) {
+		return `${fileName}-${currentValue}`;
+	}
+
+	const [, name, extension] = match;
+
+	return `${name}-${currentValue}${extension}`;
 }
 
 
