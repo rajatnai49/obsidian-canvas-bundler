@@ -136,7 +136,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 			replacements.push({
 				start: link.position.start.offset,
 				end: link.position.end.offset,
-				text: rewriteOriginalLink(link.original, newFilePath)
+				text: rewriteOriginalLink(link.original, newFilePath, false)
 			})
 		}
 
@@ -157,7 +157,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 			replacements.push({
 				start: embed.position.start.offset,
 				end: embed.position.end.offset,
-				text: rewriteOriginalLink(embed.original, embededNewFilePath)
+				text: rewriteOriginalLink(embed.original, embededNewFilePath, true)
 			})
 		}
 
@@ -177,7 +177,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 	zip.file(canvasName + ".canvas", JSON.stringify(canvasObjectData))
 
 	let zipBuffer = await zip.generateAsync({ type: "arraybuffer" })
-	await app.vault.createBinary(canvasName + "_export.zip", zipBuffer)
+	await app.vault.createBinary(canvasName + ".zip", zipBuffer)
 }
 
 function isMarkdownFile(filename: string): boolean {
@@ -213,7 +213,15 @@ function getUniqueName(
 }
 
 
-function rewriteOriginalLink(original: string, newPath: string): string {
+function rewriteOriginalLink(
+	original: string,
+	newPath: string,
+	isAttachment: boolean
+): string {
+	const relativePath = isAttachment
+		? newPath.replace(/^[^/]+\/attachments\//, "../attachments/")
+		: newPath.replace(/^[^/]+\/notes\//, "./notes/");
+
 	if (original.startsWith("[[") || original.startsWith("![[")) {
 		const isEmbed = original.startsWith("![[");
 
@@ -225,17 +233,17 @@ function rewriteOriginalLink(original: string, newPath: string): string {
 
 		if (aliasIndex !== -1) {
 			const alias = inner.slice(aliasIndex);
-			return `${open}${newPath}${alias}${close}`;
+			return `${open}${relativePath}${alias}${close}`;
 		}
 
-		return `${open}${newPath}${close}`;
+		return `${open}${relativePath}${close}`;
 	}
 
 	const markdownLinkMatch = original.match(/^(!?\[[^\]]*\]\()(.+?)(\))$/);
 
 	if (markdownLinkMatch) {
 		const [, prefix, , suffix] = markdownLinkMatch;
-		return `${prefix}${encodeURI(newPath)}${suffix}`;
+		return `${prefix}${encodeURI(relativePath)}${suffix}`;
 	}
 
 	return original;
