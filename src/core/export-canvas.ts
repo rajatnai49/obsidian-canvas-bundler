@@ -166,7 +166,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 
 	try {
 		let zipBuffer = await zip.generateAsync({ type: "arraybuffer" })
-		await app.vault.createBinary(canvasName + ".zip", zipBuffer)
+		await app.vault.createBinary(getAvailableZipPath(canvasName), zipBuffer)
 	}
 	catch (err) {
 		console.error("Canvas Export error to write zip: ", err)
@@ -204,6 +204,18 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 
 		return `${fileName.slice(0, dotIndex)}-${currentValue}${fileName.slice(dotIndex)}`;
 	}
+
+	function getAvailableZipPath(baseName: string): string {
+		let counter = 1
+		let zipPath = `${baseName}.zip`
+
+		while (app.vault.getAbstractFileByPath(zipPath)) {
+			counter += 1
+			zipPath = `${baseName}-${counter}.zip`
+		}
+
+		return zipPath
+	}
 }
 
 function isMarkdownFile(filename: string): boolean {
@@ -235,4 +247,3 @@ function rewriteLink(original: string, newPath: string, isEmbed: boolean): strin
 
 	return original
 }
-

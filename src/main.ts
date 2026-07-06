@@ -4,10 +4,9 @@ import { Notice, Plugin } from 'obsidian';
 export default class CanvasBundlePlugin extends Plugin {
 
 	async onload() {
-		console.debug("Plugin Loaded")
 		this.addCommand({
-			id: "export",
-			name: "Export",
+			id: "export-canvas-as-zip",
+			name: "Export canvas as zip",
 
 			callback: async () => {
 				const file = this.app.workspace.getActiveFile();
@@ -17,19 +16,15 @@ export default class CanvasBundlePlugin extends Plugin {
 					return;
 				}
 
-				const content = await this.app.vault.read(file)
-				await export_canvas(content, this.app, file.basename)
+				try {
+					const content = await this.app.vault.read(file)
+					await export_canvas(content, this.app, file.basename)
+					new Notice("Canvas bundle exported.")
+				} catch (error) {
+					console.error("Failed to export canvas bundle:", error)
+					new Notice("Failed to export canvas bundle.")
+				}
 			}
 		})
-	}
-
-	onunload() {
-		console.debug("plugin unloaded")
-	}
-
-	async loadSettings() {
-	}
-
-	async saveSettings() {
 	}
 }
