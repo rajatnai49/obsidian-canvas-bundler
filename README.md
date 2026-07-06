@@ -17,7 +17,7 @@ Use it when you want to share or back up a canvas without manually collecting ev
 
 1. Open a canvas file in Obsidian.
 2. Open the command palette.
-3. Run **Canvas Bundle: Export**.
+3. Run **Canvas Bundle: Export canvas as zip**.
 4. Find the generated `.zip` file in your vault root.
 
 The zip contains:
@@ -35,7 +35,7 @@ The zip contains:
 ## Planned for future releases
 
 - Include backlinks from exported text notes.
-- Recursively process canvas files embedded or linked inside exported notes.
+- Recursively process canvas files embedded inside exported notes.
 
 ## Development
 
