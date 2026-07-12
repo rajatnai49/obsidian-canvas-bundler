@@ -1,8 +1,6 @@
 # Canvas Bundle
 
-Canvas Bundle exports an Obsidian canvas and its connected files into a portable zip archive.
-
-Use it when you want to share or back up a canvas without manually collecting every linked note, attachment, and canvas asset.
+Canvas Bundle exports an Obsidian canvas and its connected files into a portable zip archive. Useful for case when you want to share or back up a canvas without manually collecting every linked note, attachment, and canvas asset.
 
 ## Features
 
@@ -65,7 +63,7 @@ npm run lint
 
 ## Manual installation
 
-Copy `main.js`, `manifest.json`, and `styles.css` into:
+Copy `main.js` and `manifest.json` into:
 
 ```text
 <Vault>/.obsidian/plugins/canvas-bundle/

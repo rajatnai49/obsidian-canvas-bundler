@@ -1,0 +1,40 @@
+name: Release
+on:
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Release version, matching manifest.json"
+                required: true
+                type: string
+permissions:
+    contents: write
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: 24
+                  cache: "npm"
+            - run: npm ci
+            - name: Check manifest version
+              env:
+                  RELEASE_VERSION: ${{ inputs.version }}
+              run: |
+                  node -e "
+                    const manifest = require('./manifest.json');
+                    if (manifest.version !== process.env.RELEASE_VERSION) {
+                      throw new Error(\`manifest.json version \${manifest.version} does not match release version \${process.env.RELEASE_VERSION}\`);
+                    }
+                  "
+            - run: npm run lint
+            - run: npm run build
+            - name: Create GitHub release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ inputs.version }}
+                  name: ${{ inputs.version }}
+                  files: |
+                      main.js
+                      manifest.json

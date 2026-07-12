@@ -3,7 +3,7 @@
 	"name": "Canvas Bundle",
 	"version": "1.0.0",
 	"minAppVersion": "1.12.7",
-	"description": "Export Obsidian canvas files with all connected notes, assets, and structure into a portable bundle.",
+	"description": "Export Obsidian canvas files with all connected notes, assets, and structure into a zip.",
 	"author": "Rajat Nai",
 	"authorUrl": "https://github.com/rajatnai49",
 	"isDesktopOnly": true
