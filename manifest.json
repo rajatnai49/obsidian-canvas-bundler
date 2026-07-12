@@ -1,7 +1,7 @@
 {
 	"id": "canvas-bundle",
 	"name": "Canvas Bundle",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"minAppVersion": "1.12.7",
 	"description": "Export canvas files with all connected notes, assets, and structure into a zip.",
 	"author": "Rajat Nai",
