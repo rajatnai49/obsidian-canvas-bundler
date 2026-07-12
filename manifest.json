@@ -1,7 +1,7 @@
 {
 	"id": "canvas-bundle",
 	"name": "Canvas Bundle",
-	"version": "1.0.0",
+	"version": "0.0.1",
 	"minAppVersion": "1.12.7",
 	"description": "Export Obsidian canvas files with all connected notes, assets, and structure into a zip.",
 	"author": "Rajat Nai",
