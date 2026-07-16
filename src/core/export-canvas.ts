@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import { strToU8, zipSync, type Zippable } from 'fflate';
 import { App, TFile } from 'obsidian';
 import type { CanvasData, CanvasFileData, CanvasGroupData } from 'obsidian/canvas'
 
@@ -10,7 +10,7 @@ interface FileToProcess {
 const ATTACHMENT_FOLDER = "attachments"
 const NOTES_FOLDER = "notes"
 
-export default async function export_canvas(canvasRaw: string, app: App, canvasName: string) {
+export default async function export_canvas(canvasRaw: string, app: App, canvasName: string, destinationFolder?: string) {
 	const visitedNotes = new Set<string>();
 	const nameCounter = new Map<string, number>();
 
@@ -33,9 +33,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 		}
 	})
 
-	const zip = new JSZip()
-	const notesFolder = zip.folder(NOTES_FOLDER)!
-	const attachmentFolder = zip.folder(ATTACHMENT_FOLDER)!
+	const zipEntries: Zippable = {}
 
 	// Handles Canvas Attachment Nodes
 	for (let attachmentNode of canvasAttachmentNodes) {
@@ -117,7 +115,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 			replacements.push({
 				start: link.position.start.offset,
 				end: link.position.end.offset,
-				text: rewriteLink(link.original, uniqueName, false)
+				text: rewriteLink(link.original, uniqueName)
 			})
 		}
 
@@ -146,7 +144,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 			replacements.push({
 				start: embed.position.start.offset,
 				end: embed.position.end.offset,
-				text: rewriteLink(embed.original, relativePath, true)
+				text: rewriteLink(embed.original, relativePath)
 			})
 		}
 
@@ -159,14 +157,23 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 				data.slice(replacement.end)
 		}
 
-		notesFolder?.file(newFileName, data)
+		zipEntries[`${NOTES_FOLDER}/${newFileName}`] = strToU8(data)
 	}
 
-	zip.file(`${canvasName}.canvas`, JSON.stringify(canvasObjectData))
+	zipEntries[`${canvasName}.canvas`] = strToU8(JSON.stringify(canvasObjectData))
 
 	try {
-		let zipBuffer = await zip.generateAsync({ type: "arraybuffer" })
-		await app.vault.createBinary(getAvailableZipPath(canvasName), zipBuffer)
+		const zipped = zipSync(zipEntries, { level: 6 })
+		const zipPath = destinationFolder
+			? `${destinationFolder}/${canvasName}.zip`
+			: `${canvasName}.zip`
+
+		const existing = app.vault.getAbstractFileByPath(zipPath)
+		if (existing instanceof TFile) {
+			await app.vault.modifyBinary(existing, zipped)
+		} else {
+			await app.vault.createBinary(zipPath, zipped)
+		}
 	}
 	catch (err) {
 		console.error("Canvas Export error to write zip: ", err)
@@ -180,7 +187,7 @@ export default async function export_canvas(canvasRaw: string, app: App, canvasN
 
 		const uniqueName = getUniqueName(file.name)
 		const buffer = await app.vault.readBinary(file)
-		attachmentFolder.file(uniqueName, buffer)
+		zipEntries[`${ATTACHMENT_FOLDER}/${uniqueName}`] = new Uint8Array(buffer)
 		filePathNameMapping.set(file.path, uniqueName)
 
 		return uniqueName
@@ -227,7 +234,7 @@ function createCanvasPaths(canvasName: string, fileName: string, isAttachment: b
 	return `${canvasName}/${folder}/${fileName}`
 }
 
-function rewriteLink(original: string, newPath: string, isEmbed: boolean): string {
+function rewriteLink(original: string, newPath: string): string {
 	const isWikiEmbed = original.startsWith("![[")
 	const isWiki = original.startsWith("[[") || isWikiEmbed
 
@@ -247,3 +254,4 @@ function rewriteLink(original: string, newPath: string, isEmbed: boolean): strin
 
 	return original
 }
+

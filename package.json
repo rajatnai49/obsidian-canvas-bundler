@@ -19,12 +19,12 @@
 		"eslint-plugin-obsidianmd": "0.1.9",
 		"globals": "14.0.0",
 		"jiti": "2.6.1",
+		"obsidian": "latest",
 		"tslib": "2.4.0",
 		"typescript": "5.8.3",
-		"obsidian": "latest",
 		"typescript-eslint": "8.35.1"
 	},
 	"dependencies": {
-		"jszip": "3.10.1"
+		"fflate": "0.8.3"
 	}
 }
